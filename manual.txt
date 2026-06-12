@@ -1,0 +1,6 @@
+chmod +x generate_certs.sh   # da permiso de ejecución al script
+./generate_certs.sh           # genera los 5 archivos de certificados
+docker compose up -d          # levanta los 3 contenedores en background (-d = detached)
+docker compose ps             # muestra el estado de cada contenedor
+docker compose logs -f        # muestra los logs en tiempo real (útil para depurar)
+docker compose down           # apaga y borra los contenedores (los volúmenes quedan)
