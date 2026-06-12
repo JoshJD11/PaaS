@@ -4,3 +4,14 @@ docker compose up -d          # levanta los 3 contenedores en background (-d = d
 docker compose ps             # muestra el estado de cada contenedor
 docker compose logs -f        # muestra los logs en tiempo real (útil para depurar)
 docker compose down           # apaga y borra los contenedores (los volúmenes quedan)
+
+docker compose exec db mysql -u wp_user -p  # Para entrar a la base de datos
+Si pide contraseña, poner wp_password
+
+http://localhost:8080   # Para ir a la pantalla de intalación de Wordpress para que se conecta a la base de datos y crear sus tablas automáticamente
+Personalmente, puse:
+Título del sitio: PaaS TEC (o el nombre del dominio si ya se tiene uno definido)
+Nombre de usuario: admin (o algo fácil de recordar)
+Contraseña: Admin1234! (no es segura pero es para recordar fácilmente)
+Correo electrónico: admin@paas.tec.cr (En realidad puede ser cualquier correo, hasta uno inventado)
+En cuanto a visibilidad de motores de búsqueda, no importa para el proyecto por lo que se puede dejar como está. 
