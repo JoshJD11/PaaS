@@ -14,4 +14,44 @@ Título del sitio: PaaS TEC (o el nombre del dominio si ya se tiene uno definido
 Nombre de usuario: admin (o algo fácil de recordar)
 Contraseña: Admin1234! (no es segura pero es para recordar fácilmente)
 Correo electrónico: admin@paas.tec.cr (En realidad puede ser cualquier correo, hasta uno inventado)
-En cuanto a visibilidad de motores de búsqueda, no importa para el proyecto por lo que se puede dejar como está. 
+En cuanto a visibilidad de motores de búsqueda, no importa para el proyecto por lo que se puede dejar como está.
+
+# ─────────────────────────────────────────
+# OwnCloud — Levantar y probar
+# ─────────────────────────────────────────
+docker compose up -d owncloud_db owncloud_redis owncloud
+
+docker compose logs -f owncloud
+# Esperar a ver algo como "Initializing finished" o que el contenedor
+# quede healthy (docker compose ps debe mostrar "healthy")
+
+http://localhost:8082   # Pantalla de login de OwnCloud
+Usuario: admin
+Contraseña: Admin1234!
+
+# Para comprobar que los archivos persisten en el volumen:
+docker compose exec owncloud ls -la /mnt/data/files/admin/files
+
+# Si necesitás reiniciar todo desde cero (borra archivos y BD de OwnCloud):
+docker compose down
+docker volume rm paas-ariana_owncloud_db_data paas-ariana_owncloud_redis_data paas-ariana_owncloud_files
+
+# ─────────────────────────────────────────
+# DHCP — Probar que el servidor reparte IPs
+# ─────────────────────────────────────────
+docker compose up -d dhcp dhcp_client_demo   # levanta solo el DHCP y un cliente de prueba
+
+docker compose logs -f dhcp_client_demo
+# Deberías ver algo así:
+#   --- IP asignada por Docker al iniciar ---     -> ej. 172.30.0.3 (la dio el IPAM de Docker)
+#   --- Solicitando IP real por DHCP ---           -> udhcpc manda DISCOVER/REQUEST
+#   --- IP obtenida del servidor DHCP ---          -> ej. 172.30.0.1xx (la dio dhcpd, NO Docker)
+
+docker compose logs dhcp
+# Acá se ven los DHCPDISCOVER / DHCPOFFER / DHCPREQUEST / DHCPACK que procesó el server
+
+# Para ver el handshake completo a nivel de paquetes (opcional, para la defensa):
+docker compose exec dhcp tcpdump -i eth0 -n port 67 or port 68
+
+# Para ver las concesiones (leases) otorgadas:
+docker compose exec dhcp cat /var/lib/dhcp/dhcpd.leases
