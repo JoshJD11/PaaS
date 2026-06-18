@@ -1,0 +1,37 @@
+# ─────────────────────────────────────────────────────────
+# Servidor OpenVPN — PaaS.net
+# Protocolo: TCP (pedido en el enunciado)
+# Interfaz:  TAP (pedido en el enunciado) -> bridging L2
+# ─────────────────────────────────────────────────────────
+
+port {{ vpn_port }}
+proto {{ vpn_proto }}
+dev tap0
+
+ca   {{ ovpn_dir }}/ca.crt
+cert {{ ovpn_dir }}/server.crt
+key  {{ ovpn_dir }}/server.key
+dh   {{ ovpn_dir }}/dh.pem
+tls-crypt {{ ovpn_dir }}/ta.key
+
+# Bridging privado: el bridge br0 actúa como gateway/DHCP de la
+# mini-LAN virtual donde caen los clientes (laptop y teléfono).
+# No se bridgea contra eth0 (ver nota en br-up.sh.j2).
+server-bridge {{ vpn_bridge_ip }} {{ vpn_netmask }} {{ vpn_pool_start }} {{ vpn_pool_end }}
+
+push "route {{ vpn_network }} {{ vpn_netmask }}"
+push "dhcp-option DNS 8.8.8.8"
+
+keepalive 10 120
+cipher AES-256-GCM
+auth SHA256
+persist-key
+persist-tun
+
+user nobody
+group nogroup
+
+status /var/log/openvpn/openvpn-status.log
+log-append /var/log/openvpn/openvpn.log
+verb 3
+explicit-exit-notify 1
