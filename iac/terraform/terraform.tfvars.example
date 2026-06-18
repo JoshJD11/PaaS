@@ -1,0 +1,8 @@
+# Copiar este archivo a terraform.tfvars y completar con tus datos
+# NUNCA subir terraform.tfvars (con datos reales) a un repositorio público
+
+aws_region    = "us-east-1"
+ami_id        = "ami-0XXXXXXXXXXXXXXXX" # Ver: https://cloud-images.ubuntu.com/locator/ec2/
+instance_type = "t2.micro"
+key_pair_name = "mi-llave-aws"
+admin_cidr    = "200.123.45.67/32" # tu IP pública actual, ver https://ifconfig.me
