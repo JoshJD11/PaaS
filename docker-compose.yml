@@ -144,7 +144,7 @@ services:
       - NET_RAW       # necesario para sockets crudos (BPF) de dhcpd
     networks:
       wan:
-        ipv4_address: 172.30.0.10
+        ipv4_address: 172.30.0.20
 
   # ─────────────────────────────────────────
   # Cliente de demostración del DHCP
@@ -163,7 +163,7 @@ services:
     networks:
       wan: {}
     command: >
-      sh -c "apk add --no-cache udhcpc tcpdump &&
+      sh -c "apk add --no-cache iproute2 tcpdump &&
              echo '--- IP asignada por Docker al iniciar ---' &&
              ip -4 addr show eth0 &&
              ip addr flush dev eth0 &&
@@ -197,5 +197,5 @@ networks:
     ipam:
       config:
         - subnet: 172.30.0.0/24
-          ip_range: 172.30.0.2/28   # Docker solo auto-asigna en .2-.14
+          ip_range: 172.30.0.0/28
           gateway: 172.30.0.1
