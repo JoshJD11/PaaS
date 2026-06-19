@@ -1,6 +1,13 @@
 #!/bin/bash
 set -e
 
+echo "==> Verificando rootfs en el volumen..."
+mkdir -p /srv/ltsp/rootfs
+if [ -z "$(ls -A /srv/ltsp/rootfs 2>/dev/null)" ]; then
+    echo "==> Primer arranque: extrayendo rootfs en el volumen montado..."
+    tar -C /srv/ltsp/rootfs -xf /opt/ltsp-rootfs.tar
+fi
+
 echo "==> Preparando servidor NFS..."
 mkdir -p /var/lib/nfs/v4recovery
 mount -t nfsd nfsd /proc/fs/nfsd 2>/dev/null || true

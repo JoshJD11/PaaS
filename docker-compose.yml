@@ -159,6 +159,8 @@ services:
     container_name: ltsp_server
     restart: always
     privileged: true   # necesario para nfsd (kernel) y rpcbind (puerto <1024)
+    volumes:
+      - ltsp_rootfs:/srv/ltsp/rootfs   # necesario: overlay del contenedor no soporta exportar por NFS
     networks:
       wan:
         ipv4_address: 172.30.0.11
@@ -226,6 +228,7 @@ volumes:
   owncloud_db_data:
   owncloud_redis_data:
   owncloud_files:
+  ltsp_rootfs:
 
 # ─────────────────────────────────────────
 # Redes

@@ -50,9 +50,11 @@ COPY --from=builder /artifacts/vmlinuz   /srv/tftp/ltsp/vmlinuz
 COPY --from=builder /artifacts/initrd.img /srv/tftp/ltsp/initrd.img
 
 # Rootfs que se exporta por NFS
-RUN mkdir -p /srv/ltsp/rootfs
-COPY --from=builder /artifacts/rootfs.tar /tmp/rootfs.tar
-RUN tar -C /srv/ltsp/rootfs -xf /tmp/rootfs.tar && rm /tmp/rootfs.tar
+# Rootfs que se exporta por NFS: se deja empacado como .tar; el
+# entrypoint lo extrae en /srv/ltsp/rootfs, que en docker-compose
+# se monta como volumen (no puede vivir en la capa overlay del
+# contenedor porque esa capa no soporta exportación NFS).
+COPY --from=builder /artifacts/rootfs.tar /opt/ltsp-rootfs.tar
 
 COPY pxelinux.cfg.default /srv/tftp/pxelinux.cfg/default
 COPY exports /etc/exports

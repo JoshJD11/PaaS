@@ -60,7 +60,7 @@ docker compose exec dhcp cat /var/lib/dhcp/dhcpd.leases
 # Thin Client Server (LTSP) — Levantar y probar
 # ─────────────────────────────────────────
 
-docker compose up -d --build ltsp_server
+docker compose up -d --build ltsp_server    # docker compose up -d --build dhcp ltsp_server para iniciar el dhcp de una vez
 # El build puede tardar varios minutos la primera vez (instala un
 # kernel real de Ubuntu para extraer vmlinuz, y arma el initrd/rootfs).
 
