@@ -55,3 +55,48 @@ docker compose exec dhcp tcpdump -i eth0 -n port 67 or port 68
 
 # Para ver las concesiones (leases) otorgadas:
 docker compose exec dhcp cat /var/lib/dhcp/dhcpd.leases
+
+# ─────────────────────────────────────────
+# Thin Client Server (LTSP) — Levantar y probar
+# ─────────────────────────────────────────
+
+docker compose up -d --build ltsp_server
+# El build puede tardar varios minutos la primera vez (instala un
+# kernel real de Ubuntu para extraer vmlinuz, y arma el initrd/rootfs).
+
+docker compose logs -f ltsp_server
+# Se debería ver: "Iniciando rpc.mountd y rpc.nfsd", luego "Iniciando TFTP..."
+
+# Paso 1: smoke test (NO hace PXE real, solo valida que el server responde)
+docker compose --profile test up ltsp_smoke_test
+# Si todo sale bien verás el contenido del rootfs (busybox, init, etc.)
+# montado por NFS, y la descarga exitosa de pxelinux.0 por TFTP.
+
+# Paso 2: prueba real de arranque PXE con una VM (QEMU), por fuera
+# del docker-compose (Docker no puede emular firmware/BIOS PXE).
+# Necesitas la VM/host donde corre Docker con acceso a "ip" y "qemu-system-x86_64".
+
+# 2.1 Encontrar el bridge de Linux que Docker creó para la red "wan":
+docker network inspect paas-ariana_wan -f '{{.Id}}'
+# Toma los primeros 12 caracteres del Id, el bridge se llama "br-<esos 12 caracteres>"
+ip link show | grep br-
+
+# 2.2 Crear una interfaz tap y conectarla a ese bridge:
+sudo ip tuntap add dev tap0 mode tap
+sudo ip link set tap0 master br-XXXXXXXXXXXX   # sustituí por el bridge real
+sudo ip link set tap0 up
+
+# 2.3 Levantar la VM en modo "network boot" (-boot n):
+sudo qemu-system-x86_64 \
+  -m 512 \
+  -boot n \
+  -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
+  -device e1000,netdev=net0 \
+  -nographic
+
+# Deberías ver en la consola de QEMU: el menú PXELINUX, luego el kernel
+# cargando, "PaaS.net Thin Client: solicitando IP por DHCP...", y al final
+# el banner del rootfs montado por NFS con una shell de BusyBox.
+
+# Para limpiar la interfaz tap luego de la prueba:
+sudo ip link delete tap0
