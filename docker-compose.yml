@@ -58,16 +58,217 @@ services:
       - "8081:80"
       - "4443:443"
 
+  # ─────────────────────────────────────────
+  # OwnCloud — base de datos propia (MariaDB)
+  # Separada de la BD de WordPress, igual que el enunciado
+  # exige separar BD y WebServer.
+  # ─────────────────────────────────────────
+  owncloud_db:
+    image: mariadb:10.11
+    container_name: owncloud_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: oc_root_password
+      MYSQL_USER: oc_user
+      MYSQL_PASSWORD: oc_password
+      MYSQL_DATABASE: owncloud_db
+      MARIADB_AUTO_UPGRADE: "1"
+    command: ["--max-allowed-packet=128M", "--innodb-log-file-size=64M"]
+    volumes:
+      - owncloud_db_data:/var/lib/mysql
+    networks:
+      - lan
+    # Tampoco expone puerto al host, igual que el servidor MySQL principal
+
+  # ─────────────────────────────────────────
+  # OwnCloud — caché (Redis)
+  # Mejora el rendimiento de bloqueos de archivos y sesiones
+  # ─────────────────────────────────────────
+  owncloud_redis:
+    image: redis:7
+    container_name: owncloud_redis
+    restart: always
+    command: ["--databases", "1"]
+    volumes:
+      - owncloud_redis_data:/data
+    networks:
+      - lan
+
+  # ─────────────────────────────────────────
+  # OwnCloud — servidor principal
+  # ─────────────────────────────────────────
+  owncloud:
+    image: owncloud/server:10.15.0
+    container_name: owncloud_server
+    restart: always
+    depends_on:
+      - owncloud_db
+      - owncloud_redis
+    environment:
+      OWNCLOUD_DOMAIN: localhost:8082
+      OWNCLOUD_TRUSTED_DOMAINS: localhost
+      OWNCLOUD_DB_TYPE: mysql
+      OWNCLOUD_DB_NAME: owncloud_db
+      OWNCLOUD_DB_USERNAME: oc_user
+      OWNCLOUD_DB_PASSWORD: oc_password
+      OWNCLOUD_DB_HOST: owncloud_db
+      OWNCLOUD_ADMIN_USERNAME: admin
+      OWNCLOUD_ADMIN_PASSWORD: Admin1234!
+      OWNCLOUD_MYSQL_UTF8MB4: "true"
+      OWNCLOUD_REDIS_ENABLED: "true"
+      OWNCLOUD_REDIS_HOST: owncloud_redis
+    healthcheck:
+      test: ["CMD", "/usr/bin/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - owncloud_files:/mnt/data
+    networks:
+      - lan
+    ports:
+      - "8082:8080"   # http://localhost:8082
+
+  # ─────────────────────────────────────────
+  # DHCP Server (DHCPD - ISC)
+  # Vive en la red "wan", fuera de la LAN de servicios.
+  # Reparte IPs en 172.30.0.100-200 a los clientes que las
+  # solicitan vía broadcast en esa red.
+  # ─────────────────────────────────────────
+  dhcp:
+    build: ./dhcp
+    container_name: dhcp_server
+    restart: always
+    cap_add:
+      - NET_ADMIN     # necesario para que dhcpd escuche broadcasts
+      - NET_RAW       # necesario para sockets crudos (BPF) de dhcpd
+    networks:
+      wan:
+        ipv4_address: 172.30.0.20
+
+  # ─────────────────────────────────────────
+  # Cliente de demostración del DHCP
+  # Al iniciar recibe una IP "fija" del IPAM de Docker (rango
+  # .2-.14), luego la suelta y pide una nueva por DHCP real,
+  # que debe caer en el rango .100-.200 servido por dhcpd.
+  # ─────────────────────────────────────────
+  dhcp_client_demo:
+    image: alpine:3.19
+    container_name: dhcp_client_demo
+    depends_on:
+      - dhcp
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      wan: {}
+    command: >
+      sh -c "apk add --no-cache iproute2 tcpdump &&
+             echo '--- IP asignada por Docker al iniciar ---' &&
+             ip -4 addr show eth0 &&
+             ip addr flush dev eth0 &&
+             echo '--- Solicitando IP real por DHCP ---' &&
+             udhcpc -i eth0 -f -q -v &&
+             echo '--- IP obtenida del servidor DHCP ---' &&
+             ip -4 addr show eth0 &&
+             sleep infinity"
+
+  # ─────────────────────────────────────────
+  # FileServer — FTP Jail (vsftpd)
+  # Simula un FreeBSD jail: proceso enjaulado
+  # en /srv/ftp/shared, sin acceso al resto del FS
+  # ─────────────────────────────────────────
+  ftp_jail:
+    build: ./fileserver/ftp
+    container_name: ftp_jail
+    restart: always
+    volumes:
+      - ftp_data:/srv/ftp/shared
+    networks:
+      - lan
+    ports:
+      - "21:21"
+      - "21100-21110:21100-21110"
+
+  # ─────────────────────────────────────────
+  # FileServer — NFS Jail (nfs-kernel-server)
+  # privileged: true es requerido para que el
+  # kernel NFS pueda montar nfsd dentro del contenedor.
+  # En el host debe estar cargado: sudo modprobe nfsd
+  # ─────────────────────────────────────────
+  nfs_jail:
+    build: ./fileserver/nfs
+    container_name: nfs_jail
+    restart: always
+    privileged: true
+    volumes:
+      - nfs_data:/srv/nfs/shared
+    networks:
+      - lan
+    ports:
+      - "2049:2049"
+      - "111:111"
+      - "20048:20048"
+
+  # ─────────────────────────────────────────
+  # FileServer — SMB Jail (Samba)
+  # Solo SMB2/3 sobre TCP:445 (NetBIOS desactivado)
+  # ─────────────────────────────────────────
+  smb_jail:
+    build: ./fileserver/smb
+    container_name: smb_jail
+    restart: always
+    volumes:
+      - smb_data:/srv/smb/shared
+    networks:
+      - lan
+    ports:
+      - "445:445"
+
+  # ─────────────────────────────────────────
+  # FileServer — Cliente Linux
+  # Demuestra el punto de montaje de los 3 protocolos
+  # desde un cliente Linux (cualquier otro servidor).
+  # privileged: true / SYS_ADMIN requerido para mount(2)
+  # ─────────────────────────────────────────
+  fs_client:
+    build: ./fileserver/client
+    container_name: fs_client
+    restart: "no"
+    privileged: true
+    depends_on:
+      - ftp_jail
+      - nfs_jail
+      - smb_jail
+    networks:
+      - lan
+
 # ─────────────────────────────────────────
 # Volúmenes persistentes
 # ─────────────────────────────────────────
 volumes:
   db_data:
   wp_data:
+  owncloud_db_data:
+  owncloud_redis_data:
+  owncloud_files:
+  ftp_data:
+  nfs_data:
+  smb_data:
 
 # ─────────────────────────────────────────
-# Red interna (LAN virtual)
+# Redes
 # ─────────────────────────────────────────
 networks:
+  # LAN virtual de servicios (db, wordpress, nginx)
   lan:
     driver: bridge
+
+  # Red "WAN" donde vive el servidor DHCP, separada de la LAN
+  wan:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+          ip_range: 172.30.0.0/28
+          gateway: 172.30.0.1
