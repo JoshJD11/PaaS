@@ -8,10 +8,6 @@ if [ -z "$(ls -A /srv/ltsp/rootfs 2>/dev/null)" ]; then
     tar -C /srv/ltsp/rootfs -xf /opt/ltsp-rootfs.tar
 fi
 
-echo "==> Asegurando permisos de lectura para unfs3 en la ruta del export..."
-chmod 755 /srv /srv/ltsp /srv/ltsp/rootfs
-chmod -R a+rX /srv/ltsp/rootfs
-
 echo "==> Iniciando rpcbind..."
 rpcbind || true
 sleep 2
