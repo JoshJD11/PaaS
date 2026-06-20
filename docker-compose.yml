@@ -184,9 +184,9 @@ services:
     networks:
       wan: {}
     command: >
-      sh -c "apk add --no-cache tftp-hpa nfs-utils &&
-             echo '--- Descargando pxelinux.0 por TFTP ---' &&
-             tftp -v 172.30.0.11 -c get pxelinux.0 /tmp/pxelinux.0 &&
+      sh -c "apk add --no-cache curl nfs-utils &&
+             echo '--- Descargando pxelinux.0 por TFTP (curl) ---' &&
+             curl -sS -o /tmp/pxelinux.0 tftp://172.30.0.11/pxelinux.0 &&
              ls -la /tmp/pxelinux.0 &&
              echo '--- Montando rootfs por NFS ---' &&
              mkdir -p /mnt/ltsp &&
