@@ -77,19 +77,24 @@ docker compose --profile test up ltsp_smoke_test
 
 # Paso 2: prueba real de arranque PXE con una VM (QEMU), por fuera
 # del docker-compose (Docker no puede emular firmware/BIOS PXE).
-# Necesitas la VM/host donde corre Docker con acceso a "ip" y "qemu-system-x86_64".
+# Necesitas la VM/host donde corre Docker con acceso a "ip" y "qemu-system-x86_64".`
 
-# 2.1 Encontrar el bridge de Linux que Docker creó para la red "wan":
-docker network inspect paas-ariana_wan -f '{{.Id}}'
-# Toma los primeros 12 caracteres del Id, el bridge se llama "br-<esos 12 caracteres>"
+# 2.1 Instalar QEMU en tu VM (si no lo tienes):
+sudo apt-get update && sudo apt-get install -y qemu-system-x86 bridge-utils
+
+# 2.2 Encontrar el bridge de Linux que Docker creó para la red wan:
+docker network inspect paas_wan -f '{{.Id}}'
+# Si ese nombre no existe, lista las redes para ver el nombre real del proyecto:
+docker network ls | grep wan
+# Toma los primeros 12 caracteres del Id, el bridge se llama "br-<esos 12 caracteres>":
 ip link show | grep br-
 
-# 2.2 Crear una interfaz tap y conectarla a ese bridge:
+# 2.3 Crear una interfaz tap y conectarla a ese bridge:
 sudo ip tuntap add dev tap0 mode tap
-sudo ip link set tap0 master br-XXXXXXXXXXXX   # sustituí por el bridge real
+sudo ip link set tap0 master br-XXXXXXXXXXXX   # sustituír por el bridge real
 sudo ip link set tap0 up
 
-# 2.3 Levantar la VM en modo "network boot" (-boot n):
+# 2.4 Levantar la VM en modo "network boot" (-boot n):
 sudo qemu-system-x86_64 \
   -m 512 \
   -boot n \
