@@ -158,7 +158,10 @@ services:
     build: ./ltsp
     container_name: ltsp_server
     restart: always
-    privileged: true   # necesario para nfsd (kernel) y rpcbind (puerto <1024)
+    cap_add:
+      - SYS_ADMIN
+      - SETUID
+      - SETGID
     volumes:
       - ltsp_rootfs:/srv/ltsp/rootfs   # necesario: overlay del contenedor no soporta exportar por NFS
     networks:
@@ -179,6 +182,8 @@ services:
     profiles: ["test"]
     cap_add:
       - SYS_ADMIN          # necesario para el syscall mount()
+    security_opt:
+      - apparmor:unconfined   # Ubuntu+AppArmor bloquea el mount NFS en contenedor
     volumes:
       - ./ltsp/smoke_test_tftp.py:/smoke_test_tftp.py:ro
     depends_on:
@@ -192,7 +197,7 @@ services:
              ls -la /tmp/pxelinux.0 &&
              echo '--- Montando rootfs por NFS ---' &&
              mkdir -p /mnt/ltsp &&
-             mount -t nfs -o nolock,vers=3 172.30.0.11:/srv/ltsp/rootfs /mnt/ltsp &&
+             mount -t nfs -o nolock,nfsvers=3,port=2049,mountport=2049,proto=tcp,mountproto=tcp,sec=sys 172.30.0.11:/srv/ltsp/rootfs /mnt/ltsp &&
              echo '--- Contenido del rootfs montado por NFS ---' &&
              ls -la /mnt/ltsp"
 

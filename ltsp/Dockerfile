@@ -31,13 +31,26 @@ RUN chmod +x /usr/local/bin/build-initramfs.sh /usr/local/bin/build-rootfs.sh &&
 FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
+# unfs3 NO esta empaquetado en Ubuntu 22.04, asi que se compila
+# desde su codigo fuente (es un proyecto C pequeno, compila en
+# segundos). El resultado es el binario /usr/local/sbin/unfsd.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         tftpd-hpa \
-        nfs-kernel-server \
         rpcbind \
         pxelinux \
         syslinux-common \
-        net-tools && \
+        net-tools \
+        ca-certificates \
+        git build-essential autoconf automake libtool flex bison pkg-config libtirpc-dev && \
+    git clone --depth 1 https://github.com/unfs3/unfs3.git /tmp/unfs3 && \
+    cd /tmp/unfs3 && \
+    ./bootstrap && \
+    ./configure && \
+    make && \
+    make install && \
+    cd / && rm -rf /tmp/unfs3 && \
+    apt-get purge -y git build-essential autoconf automake libtool flex bison pkg-config libtirpc-dev && \
+    apt-get autoremove -y && \
     rm -rf /var/lib/apt/lists/*
 
 # Bootloader PXE (modo BIOS legacy, el más compatible con QEMU/VMs/HW real)

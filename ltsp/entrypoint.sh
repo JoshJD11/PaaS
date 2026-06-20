@@ -8,16 +8,22 @@ if [ -z "$(ls -A /srv/ltsp/rootfs 2>/dev/null)" ]; then
     tar -C /srv/ltsp/rootfs -xf /opt/ltsp-rootfs.tar
 fi
 
-echo "==> Preparando servidor NFS..."
-mkdir -p /var/lib/nfs/v4recovery
-mount -t nfsd nfsd /proc/fs/nfsd 2>/dev/null || true
+echo "==> Asegurando permisos de lectura para unfs3 en la ruta del export..."
+chmod 755 /srv /srv/ltsp /srv/ltsp/rootfs
+chmod -R a+rX /srv/ltsp/rootfs
 
-rpcbind -w 2>/dev/null || true
-exportfs -ra
+echo "==> Iniciando rpcbind..."
+rpcbind || true
+sleep 2
 
-echo "==> Iniciando rpc.mountd y rpc.nfsd (NFSv3)..."
-/usr/sbin/rpc.nfsd 8
-/usr/sbin/rpc.mountd --no-nfs-version 4 --debug all --foreground &
+echo "==> Iniciando servidor NFS en espacio de usuario (unfs3)..."
+echo "    Exports configurados:"
+cat /etc/exports
+unfsd -d -s -n 2049 -m 2049 -l 0.0.0.0 -e /etc/exports &
+sleep 2
+
+echo "==> Servicios RPC registrados tras iniciar unfs3:"
+rpcinfo -p 127.0.0.1 || echo "    (aviso: rpcbind sin registros, se usara montaje por puerto directo)"
 
 echo "==> Iniciando TFTP en 0.0.0.0:69, sirviendo /srv/tftp..."
 exec /usr/sbin/in.tftpd --foreground --secure --address 0.0.0.0:69 /srv/tftp
