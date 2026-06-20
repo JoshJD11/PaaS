@@ -20,6 +20,7 @@ tls-crypt {{ ovpn_dir }}/ta.key
 server-bridge {{ vpn_bridge_ip }} {{ vpn_netmask }} {{ vpn_pool_start }} {{ vpn_pool_end }}
 
 push "route {{ vpn_network }} {{ vpn_netmask }}"
+push "redirect-gateway def1"
 push "dhcp-option DNS 8.8.8.8"
 
 keepalive 10 120
