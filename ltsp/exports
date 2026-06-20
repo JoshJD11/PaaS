@@ -1,1 +1,1 @@
-/srv/ltsp/rootfs 172.30.0.0/24(rw,sync,no_subtree_check,no_root_squash,insecure)
+/srv/ltsp/rootfs *(ro,sync,no_subtree_check,no_root_squash,insecure)
