@@ -12,8 +12,8 @@ services:
       - ./dns/named.conf.local:/etc/bind/named.conf.local:ro
       - ./dns/zones:/etc/bind/zones:ro
     ports:
-      - "5353:53/tcp"
-      - "5353:53/udp"
+      - "5300:53/tcp"
+      - "5300:53/udp"
     networks:
       lan:
         ipv4_address: 172.20.0.2   # IP fija para que los otros lo apunten
@@ -37,7 +37,7 @@ services:
       - db_data:/var/lib/mysql
     networks:
       lan:
-        ipv4_address: 172.20.0.2
+        ipv4_address: 172.20.0.3
     cap_add:
       - NET_ADMIN
 
