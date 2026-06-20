@@ -17,7 +17,7 @@ exportfs -ra
 
 echo "==> Iniciando rpc.mountd y rpc.nfsd (NFSv3)..."
 /usr/sbin/rpc.nfsd 8
-/usr/sbin/rpc.mountd --no-nfs-version 4
+/usr/sbin/rpc.mountd --no-nfs-version 4 --debug all --foreground &
 
 echo "==> Iniciando TFTP en 0.0.0.0:69, sirviendo /srv/tftp..."
 exec /usr/sbin/in.tftpd --foreground --secure --address 0.0.0.0:69 /srv/tftp
