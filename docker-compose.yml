@@ -178,15 +178,17 @@ services:
     container_name: ltsp_smoke_test
     profiles: ["test"]
     cap_add:
-      - SYS_ADMIN
+      - SYS_ADMIN          # necesario para el syscall mount()
+    volumes:
+      - ./ltsp/smoke_test_tftp.py:/smoke_test_tftp.py:ro
     depends_on:
       - ltsp_server
     networks:
       wan: {}
     command: >
-      sh -c "apk add --no-cache curl nfs-utils &&
-             echo '--- Descargando pxelinux.0 por TFTP (curl) ---' &&
-             curl -sS -o /tmp/pxelinux.0 tftp://172.30.0.11/pxelinux.0 &&
+      sh -c "apk add --no-cache python3 nfs-utils &&
+             echo '--- Descargando pxelinux.0 por TFTP (python puro) ---' &&
+             python3 /smoke_test_tftp.py &&
              ls -la /tmp/pxelinux.0 &&
              echo '--- Montando rootfs por NFS ---' &&
              mkdir -p /mnt/ltsp &&
