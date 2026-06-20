@@ -192,7 +192,7 @@
         table: nat
         chain: POSTROUTING
         source: "{{ vpn_network }}/24"
-        out_interface: eth0
+        out_interface: ens5
         jump: MASQUERADE
       notify: guardar reglas iptables
 
