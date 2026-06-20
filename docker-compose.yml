@@ -177,6 +177,8 @@ services:
     image: alpine:3.19
     container_name: ltsp_smoke_test
     profiles: ["test"]
+    cap_add:
+      - SYS_ADMIN
     depends_on:
       - ltsp_server
     networks:
