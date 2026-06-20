@@ -5,4 +5,5 @@ TIMEOUT 30
 LABEL ltsp
     MENU LABEL PaaS.net - Thin Client (arranque sin disco via NFS)
     KERNEL ltsp/vmlinuz
-    APPEND initrd=ltsp/initrd.img ip=dhcp
+    APPEND initrd=ltsp/initrd.img ip=dhcp noapic console=tty0 console=ttyS0,115200n8
+

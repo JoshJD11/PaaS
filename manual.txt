@@ -102,5 +102,13 @@ sudo qemu-system-x86_64 \
 # cargando, "PaaS.net Thin Client: solicitando IP por DHCP...", y al final
 # el banner del rootfs montado por NFS con una shell de BusyBox.
 
+# Para matar el QEMU:
+sudo pkill qemu
+
 # Para limpiar la interfaz tap luego de la prueba:
 sudo ip link delete tap0
+
+# Limpiar todo
+docker compose down -v
+docker network prune -f
+docker container prune -f

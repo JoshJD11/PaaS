@@ -61,6 +61,7 @@ RUN mkdir -p /srv/tftp/pxelinux.cfg /srv/tftp/ltsp && \
 # Kernel + initrd construidos en la etapa builder
 COPY --from=builder /artifacts/vmlinuz   /srv/tftp/ltsp/vmlinuz
 COPY --from=builder /artifacts/initrd.img /srv/tftp/ltsp/initrd.img
+RUN chmod -R a+r /srv/tftp
 
 # Rootfs que se exporta por NFS
 # Rootfs que se exporta por NFS: se deja empacado como .tar; el
