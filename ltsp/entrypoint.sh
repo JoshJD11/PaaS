@@ -16,7 +16,7 @@ rpcbind -w 2>/dev/null || true
 exportfs -ra
 
 echo "==> Iniciando rpc.mountd y rpc.nfsd (NFSv3)..."
-/usr/sbin/rpc.nfsd 8
+/usr/sbin/rpc.nfsd -N 2 -N 4 8
 /usr/sbin/rpc.mountd --no-nfs-version 4
 
 echo "==> Iniciando TFTP en 0.0.0.0:69, sirviendo /srv/tftp..."
