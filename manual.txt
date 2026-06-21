@@ -18,7 +18,8 @@ En cuanto a visibilidad de motores de búsqueda, no importa para el proyecto por
 
 # BigBlueButton
 
-Cargar archivos del repo: git submodule add https://github.com/Sebco27/bbb-docker.git bbb-docker
+Importar archivos del repo: git clone --recurse-submodules https://github.com/Sebco27/bbb-docker.git bbb-docker
 
 Ejecutar bbb.sh --build
 
+* Si faltan los submodulos usar: git submodule update --init

@@ -1,3 +1,0 @@
-[submodule "bbb-docker"]
-	path = bbb-docker
-	url = https://github.com/Sebco27/bbb-docker.git
