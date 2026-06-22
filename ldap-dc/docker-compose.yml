@@ -2,9 +2,7 @@ services:
 
   # --------------------------------------------------------------------
   # dc1: representa "Active Directory". Aprovisiona un dominio AD nuevo
-  # (LAB.LOCAL) usando Samba. Si en tu entorno real ya existiera un
-  # Windows Server con AD, este contenedor no haría falta: bastaría con
-  # apuntar PRIMARY_DC_IP (en el servicio dc2) hacia ese servidor real.
+  # (LAB.LOCAL) usando Samba. 
   # --------------------------------------------------------------------
   dc1:
     build: ./common
@@ -33,8 +31,8 @@ services:
     restart: unless-stopped
 
   # --------------------------------------------------------------------
-  # dc2: el entregable de esta asignacion. "Linux Domain Controller"
-  # que se une como controlador de dominio adicional, replica vía el
+  # dc2:
+  # Se une como controlador de dominio adicional, replica vía el
   # protocolo nativo de AD (DRS) y expone su propio LDAP (389/636)
   # con los mismos datos del dominio, sincronizados con dc1.
   # --------------------------------------------------------------------
