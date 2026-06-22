@@ -1,6 +1,6 @@
 # Linux Domain Controller con LDAP sincronizado con Active Directory
 
-Laboratorio 100% local (sin IP pública ni dominio DNS real) para la
+Servicio 100% local (sin IP pública ni dominio DNS real) para la
 asignación: un servidor Linux que actúa como **controlador de dominio**,
 expone su propio **LDAP**, y se mantiene **sincronizado con Active
 Directory**.
@@ -33,7 +33,7 @@ infraestructura pública, así que se optó por lo siguiente:
 ## Estructura del proyecto
 
 ```
-linux-dc-lab/
+ldap-dc/
 ├── docker-compose.yml      # Orquesta dc1 (AD) y dc2 (Linux DC)
 ├── common/
 │   ├── Dockerfile          # Imagen base con Samba AD DC, usada por ambos
@@ -51,7 +51,7 @@ linux-dc-lab/
 ## Despliegue
 
 ```bash
-cd linux-dc-lab
+cd ldap-dc
 docker compose up -d --build
 ```
 
@@ -107,20 +107,9 @@ y saliente.
    rechaza el "simple bind" en texto plano** si el canal no está
    cifrado o firmado — verás el error
    `Strong(er) authentication required / Transport encryption required`
-   si lo intentas con `-x` sobre `ldap://` sin más. Hay dos formas
-   correctas de consultar:
+   si se intenta con `-x` sobre `ldap://` sin más. Para consultar:
 
-   **a) Bind Kerberos (GSSAPI) — la forma nativa de AD.** Requiere un
-   ticket válido (`kinit administrator@LAB.LOCAL` primero):
-
-   ```bash
-   docker exec -it dc2 kinit administrator@LAB.LOCAL
-   docker exec -it dc2 ldapsearch -Y GSSAPI -H ldap://localhost \
-       -b "dc=lab,dc=local" "(sAMAccountName=jdoe)"
-   ```
-
-   **b) Simple bind sobre LDAPS** (más simple para pruebas rápidas;
-   se ignora la validación del certificado autofirmado de Samba):
+   **Simple bind sobre LDAPS** más simple para pruebas rápidas:
 
    ```bash
    docker exec -it dc2 bash -c \
@@ -157,7 +146,7 @@ LDAPTLS_REQCERT=never ldapsearch -x -H ldaps://localhost:2636 \
 > Igual que en el paso anterior, el simple bind solo funciona sobre
 > un canal cifrado (LDAPS, puerto 636/2636), nunca en texto plano.
 
-También puedes usar un cliente gráfico como **Apache Directory Studio**
+También se puede usar un cliente gráfico como **Apache Directory Studio**
 o **JXplorer** contra `localhost:2389` con esas mismas credenciales.
 
 ## Autenticación Kerberos de prueba
@@ -173,7 +162,7 @@ docker exec -it dc2 klist
   pública: todo vive en una red interna de Docker (`172.28.0.0/24`).
 - Contraseña de ejemplo `Passw0rd123!`; cámbiala con la variable de
   entorno `ADMIN_PASSWORD` en `docker-compose.yml` antes de desplegar.
-- `privileged: true` simplifica el laboratorio. En un entorno
+- `privileged: true` simplifica el servicio. En un entorno
   productivo se debería limitar a capacidades puntuales (`SYS_ADMIN`,
   `NET_ADMIN`, `DAC_READ_SEARCH`).
 - Los datos de Samba (`/var/lib/samba`) y la configuración
