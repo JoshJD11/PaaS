@@ -101,10 +101,32 @@ y saliente.
 
    ```bash
    docker exec -it dc2 samba-tool user list | grep -i jdoe
+   ```
 
-   docker exec -it dc2 ldapsearch -x -H ldap://localhost \
-       -D "administrator@lab.local" -w 'Passw0rd123!' \
+   Para consultar vía LDAP directamente, **Samba (igual que un AD real)
+   rechaza el "simple bind" en texto plano** si el canal no está
+   cifrado o firmado — verás el error
+   `Strong(er) authentication required / Transport encryption required`
+   si lo intentas con `-x` sobre `ldap://` sin más. Hay dos formas
+   correctas de consultar:
+
+   **a) Bind Kerberos (GSSAPI) — la forma nativa de AD.** Requiere un
+   ticket válido (`kinit administrator@LAB.LOCAL` primero):
+
+   ```bash
+   docker exec -it dc2 kinit administrator@LAB.LOCAL
+   docker exec -it dc2 ldapsearch -Y GSSAPI -H ldap://localhost \
        -b "dc=lab,dc=local" "(sAMAccountName=jdoe)"
+   ```
+
+   **b) Simple bind sobre LDAPS** (más simple para pruebas rápidas;
+   se ignora la validación del certificado autofirmado de Samba):
+
+   ```bash
+   docker exec -it dc2 bash -c \
+       "LDAPTLS_REQCERT=never ldapsearch -x -H ldaps://localhost \
+       -D 'administrator@lab.local' -w 'Passw0rd123!' \
+       -b 'dc=lab,dc=local' '(sAMAccountName=jdoe)'"
    ```
 
 4. **Probar el camino inverso** (crear en dc2, verificar en dc1) para
@@ -127,10 +149,13 @@ Los puertos LDAP/LDAPS están mapeados al host:
 | dc2 (Linux DC) | `localhost:2389` | `localhost:2636` |
 
 ```bash
-ldapsearch -x -H ldap://localhost:2389 \
+LDAPTLS_REQCERT=never ldapsearch -x -H ldaps://localhost:2636 \
     -D "administrator@lab.local" -w 'Passw0rd123!' \
     -b "dc=lab,dc=local" "(objectClass=user)"
 ```
+
+> Igual que en el paso anterior, el simple bind solo funciona sobre
+> un canal cifrado (LDAPS, puerto 636/2636), nunca en texto plano.
 
 También puedes usar un cliente gráfico como **Apache Directory Studio**
 o **JXplorer** contra `localhost:2389` con esas mismas credenciales.
