@@ -9,6 +9,22 @@
 #   ./start-dns-stack.sh
 # ─────────────────────────────────────────────────────────
 
+# ─────────────────────────────────────────────────────────
+# Función para agregar entradas a /etc/hosts de forma idempotente
+# ─────────────────────────────────────────────────────────
+add_host_entry() {
+    local ip="$1"
+    local hostname="$2"
+    
+    # Verifica si la línea ya existe (ignorando espacios/tabuladores)
+    if ! grep -q "^$ip\s\+$hostname" /etc/hosts; then
+        echo "[INFO] Agregando $hostname -> $ip a /etc/hosts (requiere sudo)..."
+        echo "$ip $hostname" | sudo tee -a /etc/hosts > /dev/null
+    else
+        echo "[INFO] $hostname ya existe en /etc/hosts, omitiendo."
+    fi
+}
+
 set -e
 
 DOMAIN="paas.tec.cr"
@@ -32,8 +48,8 @@ docker compose up -d
 
 # Espera unos segundos a que BIND9 termine de inicializar
 echo ""
-echo "[2/4] Esperando a que los servicios inicien (10s)..."
-sleep 10
+echo "[2/4] Esperando a que los servicios inicien (5s)..."
+sleep 5
 
 # Muestra estado de los contenedores
 echo ""
@@ -44,6 +60,10 @@ docker compose ps
 echo ""
 echo "[4/4] Validando resolución DNS..."
 echo ""
+
+# Configura el archivo hosts del sistema
+add_host_entry "172.20.0.4" "$DOMAIN"
+add_host_entry "172.20.0.4" "$WWW_HOST"
 
 if command -v dig &> /dev/null; then
     echo "--- Prueba con dig (puerto $DNS_HOST_PORT) ---"
@@ -68,3 +88,4 @@ echo "=========================================="
 echo " Listo. Si ves una IP arriba (ej. 172.20.0.4),"
 echo " el DNS está funcionando correctamente."
 echo "=========================================="
+
