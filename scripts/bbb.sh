@@ -10,6 +10,8 @@ if [ -z "$1" ]; then
   exit 1
 fi
 
+cd ../
+
 case "$1" in
   --pull)
     git clone --recurse-submodules https://github.com/Sebco27/bbb-docker.git bbb-docker
