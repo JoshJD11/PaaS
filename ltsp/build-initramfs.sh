@@ -58,12 +58,17 @@ echo "PaaS.net Thin Client: montando raiz por NFS (ltsp_server:/srv/ltsp/rootfs)
 /bin/busybox mount -t nfs -o nolock,vers=3,port=2049,mountport=2049,proto=tcp \
     172.30.0.11:/srv/ltsp/rootfs /newroot
 
-if [ ! -x /newroot/init ]; then
-    echo "ERROR: no se pudo montar el filesystem raiz por NFS. Shell de emergencia:"
+if [ ! -e /newroot/lib/systemd/systemd ] && [ ! -e /newroot/usr/lib/systemd/systemd ]; then
+    echo "ERROR: no se pudo montar el filesystem raiz Ubuntu por NFS. Shell de emergencia:"
     exec /bin/busybox sh
 fi
 
-exec /bin/busybox switch_root /newroot /init
+echo "PaaS.net Thin Client: entregando control a Ubuntu (systemd)..."
+if [ -e /newroot/lib/systemd/systemd ]; then
+    exec /bin/busybox switch_root /newroot /lib/systemd/systemd
+else
+    exec /bin/busybox switch_root /newroot /usr/lib/systemd/systemd
+fi
 EOF
 chmod +x "$WORK"/init
 
