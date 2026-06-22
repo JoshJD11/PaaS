@@ -15,3 +15,11 @@ Nombre de usuario: admin (o algo fácil de recordar)
 Contraseña: Admin1234! (no es segura pero es para recordar fácilmente)
 Correo electrónico: admin@paas.tec.cr (En realidad puede ser cualquier correo, hasta uno inventado)
 En cuanto a visibilidad de motores de búsqueda, no importa para el proyecto por lo que se puede dejar como está. 
+
+# BigBlueButton
+
+Importar archivos del repo: git clone --recurse-submodules https://github.com/Sebco27/bbb-docker.git bbb-docker
+
+Ejecutar bbb.sh --build
+
+* Si faltan los submodulos usar: git submodule update --init
