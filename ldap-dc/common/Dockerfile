@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y \
         krb5-user \
         krb5-config \
         ldap-utils \
+        libsasl2-modules-gssapi-mit \
         dnsutils \
         iputils-ping \
         attr \
