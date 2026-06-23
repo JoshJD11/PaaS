@@ -1,1 +1,1 @@
-/srv/ltsp/rootfs 172.30.0.0/24(ro,no_root_squash)
+/srv/ltsp/rootfs 172.30.0.0/24(rw,no_root_squash)
