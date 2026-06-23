@@ -276,13 +276,13 @@ networks:
   # LAN virtual de servicios (db, wordpress, nginx)
   lan:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
 
   # Red "WAN" donde vive el servidor DHCP, separada de la LAN
   wan:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/24
     ipam:
       config:
         - subnet: 172.30.0.0/24
