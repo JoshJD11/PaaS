@@ -1,0 +1,41 @@
+# ─────────────────────────────────────────────────────────
+# Perfil de cliente OpenVPN — PaaS.net ({{ client_name }})
+#
+# IMPORTANTE: este perfil usa "dev tap" (bridging L2), pedido en
+# el enunciado. Los clientes basados en OpenVPN3 (la app moderna
+# "OpenVPN Connect" para Windows/macOS/Android/iOS) NO soportan
+# TAP y rechazarán este archivo con un error. Hay que usar un
+# cliente OpenVPN2:
+#   - Windows : "OpenVPN GUI" (instalador clásico, no "OpenVPN Connect")
+#   - macOS   : Tunnelblick
+#   - Linux   : paquete "openvpn" (cliente de línea de comandos)
+#   - Android : OpenVPN Connect NO sirve. Alternativa: "VPN Client Pro"
+#               (colucci-web.it), que emula TAP sin necesitar root.
+#   - iOS     : no se conoce un cliente que soporte TAP actualmente;
+#               documentar esta limitación si aplica a tu caso.
+# ─────────────────────────────────────────────────────────
+client
+dev tap
+proto {{ vpn_proto }}
+remote {{ server_public_ip }} {{ vpn_port }}
+resolv-retry infinite
+nobind
+persist-key
+persist-tun
+remote-cert-tls server
+cipher AES-256-GCM
+auth SHA256
+verb 3
+
+<ca>
+{{ ca_cert_content }}
+</ca>
+<cert>
+{{ client_cert_content }}
+</cert>
+<key>
+{{ client_key_content }}
+</key>
+<tls-crypt>
+{{ ta_key_content }}
+</tls-crypt>

@@ -5,8 +5,8 @@
 # Requerimiento del proyecto: OpenSSL, documentar todo el proceso.
 # ─────────────────────────────────────────────────────────────
 
-CERTS_DIR="/etc/nginx/certs"
-sudo mkdir -p "$CERTS_DIR"
+CERTS_DIR="./nginx/certs"
+mkdir -p "$CERTS_DIR"
 
 echo "==> 1. Generando clave privada de la CA..."
 openssl genrsa -out "$CERTS_DIR/ca.key" 4096

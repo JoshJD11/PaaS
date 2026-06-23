@@ -1,5 +1,24 @@
 services:
-
+  # ─────────────────────────────────────────
+  # DNS Server (BIND9)
+  # ─────────────────────────────────────────
+  dns:
+    image: ubuntu/bind9:latest
+    container_name: dns_server
+    restart: always
+    volumes:
+      - ./dns/named.conf:/etc/bind/named.conf:ro
+      - ./dns/named.conf.options:/etc/bind/named.conf.options:ro
+      - ./dns/named.conf.local:/etc/bind/named.conf.local:ro
+      - ./dns/zones:/etc/bind/zones:ro
+    ports:
+      - "5300:53/tcp"
+      - "5300:53/udp"
+    networks:
+      lan:
+        ipv4_address: 172.20.0.2   # IP fija para que los otros lo apunten
+    cap_add:
+      - NET_ADMIN
   # ─────────────────────────────────────────
   # Database Server (MySQL)
   # ─────────────────────────────────────────
@@ -7,6 +26,8 @@ services:
     image: mysql:8.0
     container_name: mysql_server
     restart: always
+    dns:
+      - 172.20.0.2
     environment:
       MYSQL_ROOT_PASSWORD: rootpassword
       MYSQL_DATABASE: wordpress_db
@@ -15,9 +36,10 @@ services:
     volumes:
       - db_data:/var/lib/mysql
     networks:
-      - lan
-    # MySQL NO expone puerto al host, solo a la red interna
-    # Así el WebServer es el único que puede conectarse
+      lan:
+        ipv4_address: 172.20.0.3
+    cap_add:
+      - NET_ADMIN
 
   # ─────────────────────────────────────────
   # Web Server + CMS (WordPress)
@@ -28,6 +50,9 @@ services:
     restart: always
     depends_on:
       - db
+      - dns
+    dns:
+      - 172.20.0.2
     environment:
       WORDPRESS_DB_HOST: db:3306
       WORDPRESS_DB_NAME: wordpress_db
@@ -36,7 +61,8 @@ services:
     volumes:
       - wp_data:/var/www/html
     networks:
-      - lan
+      lan:
+        ipv4_address: 172.20.0.4
     ports:
       - "8080:80"   # HTTP sin cifrado
 
@@ -49,14 +75,188 @@ services:
     restart: always
     depends_on:
       - wordpress
+      - dns
+    dns:
+      - 172.20.0.2
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/certs:/etc/nginx/certs:ro   # certificados autofirmados
     networks:
-      - lan
+      lan:
+        ipv4_address: 172.20.0.5
     ports:
       - "8081:80"
       - "4443:443"
+
+  # ─────────────────────────────────────────
+  # OwnCloud — base de datos propia (MariaDB)
+  # Separada de la BD de WordPress, igual que el enunciado
+  # exige separar BD y WebServer.
+  # ─────────────────────────────────────────
+  owncloud_db:
+    image: mariadb:10.11
+    container_name: owncloud_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: oc_root_password
+      MYSQL_USER: oc_user
+      MYSQL_PASSWORD: oc_password
+      MYSQL_DATABASE: owncloud_db
+      MARIADB_AUTO_UPGRADE: "1"
+    command: ["--max-allowed-packet=128M", "--innodb-log-file-size=64M"]
+    volumes:
+      - owncloud_db_data:/var/lib/mysql
+    networks:
+      - lan
+    # Tampoco expone puerto al host, igual que el servidor MySQL principal
+
+  # ─────────────────────────────────────────
+  # OwnCloud — caché (Redis)
+  # Mejora el rendimiento de bloqueos de archivos y sesiones
+  # ─────────────────────────────────────────
+  owncloud_redis:
+    image: redis:7
+    container_name: owncloud_redis
+    restart: always
+    command: ["--databases", "1"]
+    volumes:
+      - owncloud_redis_data:/data
+    networks:
+      - lan
+
+  # ─────────────────────────────────────────
+  # OwnCloud — servidor principal
+  # ─────────────────────────────────────────
+  owncloud:
+    image: owncloud/server:10.15.0
+    container_name: owncloud_server
+    restart: always
+    depends_on:
+      - owncloud_db
+      - owncloud_redis
+    environment:
+      OWNCLOUD_DOMAIN: localhost:8082
+      OWNCLOUD_TRUSTED_DOMAINS: localhost
+      OWNCLOUD_DB_TYPE: mysql
+      OWNCLOUD_DB_NAME: owncloud_db
+      OWNCLOUD_DB_USERNAME: oc_user
+      OWNCLOUD_DB_PASSWORD: oc_password
+      OWNCLOUD_DB_HOST: owncloud_db
+      OWNCLOUD_ADMIN_USERNAME: admin
+      OWNCLOUD_ADMIN_PASSWORD: Admin1234!
+      OWNCLOUD_MYSQL_UTF8MB4: "true"
+      OWNCLOUD_REDIS_ENABLED: "true"
+      OWNCLOUD_REDIS_HOST: owncloud_redis
+    healthcheck:
+      test: ["CMD", "/usr/bin/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - owncloud_files:/mnt/data
+    networks:
+      - lan
+    ports:
+      - "8082:8080"   # http://localhost:8082
+
+  # ─────────────────────────────────────────
+  # DHCP Server (DHCPD - ISC)
+  # Vive en la red "wan", fuera de la LAN de servicios.
+  # Reparte IPs en 172.30.0.100-200 a los clientes que las
+  # solicitan vía broadcast en esa red.
+  # ─────────────────────────────────────────
+  dhcp:
+    build: ./dhcp
+    container_name: dhcp_server
+    restart: always
+    cap_add:
+      - NET_ADMIN     # necesario para que dhcpd escuche broadcasts
+      - NET_RAW       # necesario para sockets crudos (BPF) de dhcpd
+    networks:
+      wan:
+        ipv4_address: 172.30.0.20
+
+  # ─────────────────────────────────────────
+  # Thin Client Server (estilo LTSP: PXE + TFTP + NFS root)
+  # Sirve por TFTP el bootloader/kernel/initrd que un cliente
+  # delgado (sin disco) descarga al arrancar por PXE, y por NFS
+  # el filesystem raíz que ese cliente monta como su "/".
+  # El DHCP (servicio "dhcp") ya está configurado para indicarle
+  # a los clientes PXE que vengan a esta IP (172.30.0.11).
+  # ─────────────────────────────────────────
+  ltsp_server:
+    build: ./ltsp
+    container_name: ltsp_server
+    restart: always
+    cap_add:
+      - SYS_ADMIN
+      - SETUID
+      - SETGID
+    volumes:
+      - ltsp_rootfs:/srv/ltsp/rootfs   # necesario: overlay del contenedor no soporta exportar por NFS
+    networks:
+      wan:
+        ipv4_address: 172.30.0.11
+    depends_on:
+      - dhcp
+
+  # ─────────────────────────────────────────
+  # Smoke test del Thin Client Server (NO hace PXE real, solo
+  # valida que el TFTP y el NFS del ltsp_server responden bien
+  # antes de probar con una VM/hardware real haciendo PXE boot).
+  # Se ejecuta aparte con: docker compose --profile test up ltsp_smoke_test
+  # ─────────────────────────────────────────
+  ltsp_smoke_test:
+    image: alpine:3.19
+    container_name: ltsp_smoke_test
+    profiles: ["test"]
+    cap_add:
+      - SYS_ADMIN          # necesario para el syscall mount()
+    security_opt:
+      - apparmor:unconfined   # Ubuntu+AppArmor bloquea el mount NFS en contenedor
+    volumes:
+      - ./ltsp/smoke_test_tftp.py:/smoke_test_tftp.py:ro
+    depends_on:
+      - ltsp_server
+    networks:
+      wan: {}
+    command: >
+      sh -c "apk add --no-cache python3 nfs-utils &&
+             echo '--- Descargando pxelinux.0 por TFTP (python puro) ---' &&
+             python3 /smoke_test_tftp.py &&
+             ls -la /tmp/pxelinux.0 &&
+             echo '--- Montando rootfs por NFS ---' &&
+             mkdir -p /mnt/ltsp &&
+             mount -t nfs -o nolock,nfsvers=3,port=2049,mountport=2049,proto=tcp,mountproto=tcp,sec=sys 172.30.0.11:/srv/ltsp/rootfs /mnt/ltsp &&
+             echo '--- Contenido del rootfs montado por NFS ---' &&
+             ls -la /mnt/ltsp"
+
+  # ─────────────────────────────────────────
+  # Cliente de demostración del DHCP
+  # Al iniciar recibe una IP "fija" del IPAM de Docker (rango
+  # .2-.14), luego la suelta y pide una nueva por DHCP real,
+  # que debe caer en el rango .100-.200 servido por dhcpd.
+  # ─────────────────────────────────────────
+  dhcp_client_demo:
+    image: alpine:3.19
+    container_name: dhcp_client_demo
+    depends_on:
+      - dhcp
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      wan: {}
+    command: >
+      sh -c "apk add --no-cache iproute2 tcpdump &&
+             echo '--- IP asignada por Docker al iniciar ---' &&
+             ip -4 addr show eth0 &&
+             ip addr flush dev eth0 &&
+             echo '--- Solicitando IP real por DHCP ---' &&
+             udhcpc -i eth0 -f -q -v &&
+             echo '--- IP obtenida del servidor DHCP ---' &&
+             ip -4 addr show eth0 &&
+             sleep infinity"
 
 # ─────────────────────────────────────────
 # Volúmenes persistentes
@@ -64,10 +264,27 @@ services:
 volumes:
   db_data:
   wp_data:
+  owncloud_db_data:
+  owncloud_redis_data:
+  owncloud_files:
+  ltsp_rootfs:
 
 # ─────────────────────────────────────────
-# Red interna (LAN virtual)
+# Redes
 # ─────────────────────────────────────────
 networks:
+  # LAN virtual de servicios (db, wordpress, nginx)
   lan:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+
+  # Red "WAN" donde vive el servidor DHCP, separada de la LAN
+  wan:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+          ip_range: 172.30.0.0/28
+          gateway: 172.30.0.1

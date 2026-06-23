@@ -1,0 +1,18 @@
+#!/bin/bash
+# Crea un bridge PRIVADO (br0) que solo contiene la interfaz tap0.
+# A propósito NO se agrega eth0 al bridge: AWS VPC no permite que un
+# bridge L2 reenvíe tráfico con MACs/IPs distintas a las asignadas por
+# el ENI, así que "bridgear" hacia la LAN física de la nube no
+# funciona. En su lugar, OpenVPN actúa como switch L2 únicamente
+# entre sus propios clientes (laptop, teléfono), y el bridge recibe
+# una IP propia ({{ vpn_bridge_ip }}) que sirve de gateway/DHCP a
+# esa mini-LAN virtual.
+
+set -e
+
+ip link add br0 type bridge
+ip tuntap add dev tap0 mode tap
+ip link set tap0 up
+ip link set tap0 master br0
+ip addr add {{ vpn_bridge_ip }}/24 dev br0
+ip link set br0 up

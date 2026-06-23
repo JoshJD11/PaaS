@@ -1,0 +1,9 @@
+zone "paas.tec.cr" {
+    type master;
+    file "/etc/bind/zones/db.paas.tec.cr";
+};
+
+zone "172.20.0.in-addr.arpa" {
+    type master;
+    file "/etc/bind/zones/db.reverse";
+};
