@@ -1,0 +1,14 @@
+$TTL 604800
+@   IN  SOA ns1.paas.tec.cr. admin.paas.tec.cr. (
+            2026061301
+            604800
+            86400
+            2419200
+            604800 )
+
+@   IN  NS  ns1.paas.tec.cr.
+
+; PTR records (último octeto de la IP)
+2   IN  PTR ns1.paas.tec.cr.
+3   IN  PTR db.paas.tec.cr.
+4   IN  PTR www.paas.tec.cr.
