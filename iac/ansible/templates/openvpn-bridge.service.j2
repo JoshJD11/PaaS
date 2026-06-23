@@ -1,0 +1,14 @@
+[Unit]
+Description=Bridge privado (br0+tap0) para OpenVPN en modo TAP
+Before=openvpn-server@server.service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/br-up.sh
+ExecStop=/usr/local/sbin/br-down.sh
+
+[Install]
+WantedBy=multi-user.target
