@@ -277,11 +277,74 @@ sudo systemctl start mysql
 sudo systemctl start php8.4-fpm
 sudo systemctl start nginx
 
-
+# ─────────────────────────────────────────
 # BigBlueButton
+# ─────────────────────────────────────────
 
-Importar archivos del repo: git clone --recurse-submodules https://github.com/Sebco27/bbb-docker.git bbb-docker
+# 1. Importar archivos del repo
 
-Ejecutar bbb.sh --build
+bbb.sh --pull
 
-* Si faltan los submodulos usar: git submodule update --init
+# 2. Construir la imagen docker
+
+bbb.sh --build
+
+# 3. Levantar el servicio
+
+bbb.sh --up
+
+# 4. Apagar el servicio
+
+bbb.sh --down
+
+# ─────────────────────────────────────────
+# Wordpress - Kubernetes
+# ─────────────────────────────────────────
+
+# 1. Instalar Minikube
+
+curl -LO https://github.com/kubernetes/minikube/releases/latest/download/minikube-linux-amd64
+
+sudo install minikube-linux-amd64 /usr/local/bin/minikube && rm minikube-linux-amd64
+
+Instalar kubectl:
+
+sudo snap install kubectl --classic
+
+Verificar:
+kubectl version --client
+
+# 2. Crear el clúster
+
+minikube start --driver=docker
+
+Comprobar:
+kubectl get nodes
+
+# 3. Crear los recursos
+
+kubectl apply -f kubernetes/
+
+Verificar:
+kubectl get deployments
+
+Ver Pods:
+kubectl get pods
+
+# 4. Verificar servicios
+
+kubectl get svc
+
+Si Kompose creó un Service tipo ClusterIP cambiarlo a NodePort:
+kubectl patch svc wordpress -p '{"spec":{"type":"NodePort"}}'
+
+# 5. Probar Wordpress
+
+minikube service wordpress --url
+
+Abrir URL en un navegador
+
+# 6. Apagar Kubernetes
+
+kubectl delete -f kubernetes/
+

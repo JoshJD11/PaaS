@@ -3,7 +3,7 @@
 if [ -z "$1" ]; then
   echo "Uso:"
   echo "  $0 --pull    Importa BBB-Docker con sus submodulos"
-  echo "  $0 --build   Construye y ejecuta el entorno"
+  echo "  $0 --build   Construye la imagen"
   echo "  $0 --up      Levanta los servicios (en modo detach)"
   echo "  $0 --down    Detiene los servicios"
   echo ""
