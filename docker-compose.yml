@@ -258,6 +258,77 @@ services:
              ip -4 addr show eth0 &&
              sleep infinity"
 
+  # ─────────────────────────────────────────
+  # FileServer — FTP Jail (vsftpd)
+  # Simula un FreeBSD jail: proceso enjaulado
+  # en /srv/ftp/shared, sin acceso al resto del FS
+  # ─────────────────────────────────────────
+  ftp_jail:
+    build: ./fileserver/ftp
+    container_name: ftp_jail
+    restart: always
+    volumes:
+      - ftp_data:/srv/ftp/shared
+    networks:
+      - lan
+    ports:
+      - "21:21"
+      - "21100-21110:21100-21110"
+
+  # ─────────────────────────────────────────
+  # FileServer — NFS Jail (nfs-kernel-server)
+  # privileged: true es requerido para que el
+  # kernel NFS pueda montar nfsd dentro del contenedor.
+  # En el host debe estar cargado: sudo modprobe nfsd
+  # ─────────────────────────────────────────
+  nfs_jail:
+    build: ./fileserver/nfs
+    container_name: nfs_jail
+    restart: always
+    privileged: true
+    volumes:
+      - nfs_data:/srv/nfs/shared
+    networks:
+      - lan
+    ports:
+      - "2049:2049"
+      - "111:111"
+      - "20048:20048"
+
+  # ─────────────────────────────────────────
+  # FileServer — SMB Jail (Samba)
+  # Solo SMB2/3 sobre TCP:445 (NetBIOS desactivado)
+  # ─────────────────────────────────────────
+  smb_jail:
+    build: ./fileserver/smb
+    container_name: smb_jail
+    restart: always
+    volumes:
+      - smb_data:/srv/smb/shared
+    networks:
+      - lan
+    ports:
+      - "445:445"
+
+  # ─────────────────────────────────────────
+  # FileServer — Cliente Linux
+  # Demuestra el punto de montaje de los 3 protocolos
+  # desde un cliente Linux (cualquier otro servidor).
+  # privileged: true / SYS_ADMIN requerido para mount(2)
+  # ─────────────────────────────────────────
+  fs_client:
+    build: ./fileserver/client
+    container_name: fs_client
+    restart: "no"
+    privileged: true
+    depends_on:
+      - ftp_jail
+      - nfs_jail
+      - smb_jail
+    networks:
+      - lan
+
+
 # ─────────────────────────────────────────
 # Volúmenes persistentes
 # ─────────────────────────────────────────
@@ -268,6 +339,9 @@ volumes:
   owncloud_redis_data:
   owncloud_files:
   ltsp_rootfs:
+  ftp_data:
+  nfs_data:
+  smb_data:
 
 # ─────────────────────────────────────────
 # Redes

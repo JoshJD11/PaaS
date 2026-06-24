@@ -1,0 +1,21 @@
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y \
+    nfs-kernel-server \
+    nfs-common \
+    rpcbind \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Directorio del NFS jail
+RUN mkdir -p /srv/nfs/shared && chmod 777 /srv/nfs/shared
+
+COPY exports      /etc/exports
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# NFS (TCP/UDP), portmapper, mountd
+EXPOSE 2049 111 20048
+
+# Necesita privilegios para montar nfsd y crear sockets de kernel
+CMD ["/entrypoint.sh"]
