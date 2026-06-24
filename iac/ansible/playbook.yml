@@ -1,0 +1,223 @@
+---
+# ─────────────────────────────────────────────────────────
+# Playbook: configura OpenVPN (TCP + TAP, bridging privado)
+# en el servidor EC2 que Terraform ya aprovisionó.
+#
+# Uso:
+#   ansible-playbook -i inventory.ini playbook.yml
+# ─────────────────────────────────────────────────────────
+- name: Configurar servidor OpenVPN (PaaS.net)
+  hosts: openvpn_server
+  become: true
+  gather_facts: true
+
+  vars:
+    vpn_port: 1194
+    vpn_proto: tcp
+    vpn_bridge_ip: 10.8.0.1
+    vpn_netmask: 255.255.255.0
+    vpn_network: 10.8.0.0
+    vpn_pool_start: 10.8.0.50
+    vpn_pool_end: 10.8.0.100
+    easyrsa_dir: /etc/openvpn/easy-rsa
+    ovpn_dir: /etc/openvpn/server
+    vpn_clients:
+      - desktop
+      - phone
+
+  handlers:
+    - name: recargar systemd
+      systemd:
+        daemon_reload: true
+
+    - name: guardar reglas iptables
+      command: netfilter-persistent save
+
+  tasks:
+    # ── Paquetes ────────────────────────────────────────
+    - name: Actualizar caché de apt
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Instalar OpenVPN, easy-rsa e iptables-persistent
+      apt:
+        name:
+          - openvpn
+          - easy-rsa
+          - iptables-persistent
+          - iproute2
+        state: present
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+
+    # ── Enrutamiento ────────────────────────────────────
+    - name: Habilitar IP forwarding de forma persistente
+      sysctl:
+        name: net.ipv4.ip_forward
+        value: '1'
+        sysctl_set: true
+        state: present
+        reload: true
+
+    # ── PKI con easy-rsa ────────────────────────────────
+    - name: Crear directorio de trabajo de easy-rsa
+      file:
+        path: "{{ easyrsa_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Copiar los scripts de easy-rsa al directorio de trabajo
+      copy:
+        src: /usr/share/easy-rsa/
+        dest: "{{ easyrsa_dir }}/"
+        remote_src: true
+        mode: preserve
+
+    - name: Inicializar la PKI
+      command: ./easyrsa init-pki
+      args:
+        chdir: "{{ easyrsa_dir }}"
+        creates: "{{ easyrsa_dir }}/pki"
+
+    - name: Construir la CA (sin passphrase, modo no interactivo)
+      command: ./easyrsa build-ca nopass
+      args:
+        chdir: "{{ easyrsa_dir }}"
+        creates: "{{ easyrsa_dir }}/pki/ca.crt"
+      environment:
+        EASYRSA_BATCH: "1"
+        EASYRSA_REQ_CN: "PaaS-VPN-CA"
+
+    - name: Generar la solicitud de certificado del servidor
+      command: ./easyrsa gen-req server nopass
+      args:
+        chdir: "{{ easyrsa_dir }}"
+        creates: "{{ easyrsa_dir }}/pki/private/server.key"
+      environment:
+        EASYRSA_BATCH: "1"
+
+    - name: Firmar el certificado del servidor con la CA
+      command: ./easyrsa sign-req server server
+      args:
+        chdir: "{{ easyrsa_dir }}"
+        creates: "{{ easyrsa_dir }}/pki/issued/server.crt"
+      environment:
+        EASYRSA_BATCH: "1"
+
+    - name: Generar parámetros Diffie-Hellman (puede tardar varios minutos)
+      command: ./easyrsa gen-dh
+      args:
+        chdir: "{{ easyrsa_dir }}"
+        creates: "{{ easyrsa_dir }}/pki/dh.pem"
+      environment:
+        EASYRSA_BATCH: "1"
+
+    - name: Generar la llave tls-crypt (protección extra del canal de control)
+      command: "openvpn --genkey secret {{ easyrsa_dir }}/pki/ta.key"
+      args:
+        creates: "{{ easyrsa_dir }}/pki/ta.key"
+
+    # ── Copiar material criptográfico al directorio del servidor ──
+    - name: Crear /etc/openvpn/server
+      file:
+        path: "{{ ovpn_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Copiar certificados y llaves al directorio del servidor OpenVPN
+      copy:
+        src: "{{ easyrsa_dir }}/pki/{{ item.src }}"
+        dest: "{{ ovpn_dir }}/{{ item.dest }}"
+        remote_src: true
+        mode: '0600'
+      loop:
+        - { src: "ca.crt",            dest: "ca.crt" }
+        - { src: "issued/server.crt", dest: "server.crt" }
+        - { src: "private/server.key", dest: "server.key" }
+        - { src: "dh.pem",            dest: "dh.pem" }
+        - { src: "ta.key",            dest: "ta.key" }
+
+    # ── Bridge privado (br0 + tap0) ─────────────────────
+    - name: Desplegar script de creación del bridge
+      template:
+        src: br-up.sh.j2
+        dest: /usr/local/sbin/br-up.sh
+        mode: '0755'
+
+    - name: Desplegar script de destrucción del bridge
+      template:
+        src: br-down.sh.j2
+        dest: /usr/local/sbin/br-down.sh
+        mode: '0755'
+
+    - name: Desplegar unidad systemd del bridge
+      template:
+        src: openvpn-bridge.service.j2
+        dest: /etc/systemd/system/openvpn-bridge.service
+        mode: '0644'
+      notify: recargar systemd
+
+    - name: Forzar recarga de systemd antes de habilitar servicios
+      meta: flush_handlers
+
+    - name: Habilitar y arrancar el bridge privado
+      systemd:
+        name: openvpn-bridge
+        enabled: true
+        state: started
+
+    # ── Configuración y arranque de OpenVPN ─────────────
+    - name: Crear directorio de logs de OpenVPN
+      file:
+        path: /var/log/openvpn
+        state: directory
+        mode: '0755'
+
+    - name: Desplegar server.conf
+      template:
+        src: server.conf.j2
+        dest: "{{ ovpn_dir }}/server.conf"
+        mode: '0600'
+
+    - name: Habilitar y arrancar el servidor OpenVPN (TCP/TAP)
+      systemd:
+        name: openvpn-server@server
+        enabled: true
+        state: restarted
+
+    # ── NAT para que los clientes VPN salgan a Internet ─
+    - name: Regla NAT (MASQUERADE) para la subred de la VPN
+      iptables:
+        table: nat
+        chain: POSTROUTING
+        source: "{{ vpn_network }}/24"
+        out_interface: ens5
+        jump: MASQUERADE
+      notify: guardar reglas iptables
+
+    - name: Forzar guardado de reglas iptables
+      meta: flush_handlers
+
+    # ── Certificados y perfiles de cliente (laptop y teléfono) ──
+    - name: Leer certificado CA (para incrustar en los perfiles de cliente)
+      slurp:
+        src: "{{ easyrsa_dir }}/pki/ca.crt"
+      register: ca_cert_b64
+
+    - name: Leer llave tls-crypt (para incrustar en los perfiles de cliente)
+      slurp:
+        src: "{{ easyrsa_dir }}/pki/ta.key"
+      register: ta_key_b64
+
+    - name: Generar certificado y perfil .ovpn para cada cliente
+      include_tasks: client_profile.yml
+      loop: "{{ vpn_clients }}"
+      loop_control:
+        loop_var: client_name
+
+    - name: Mostrar resumen final
+      debug:
+        msg:
+          - "Servidor OpenVPN listo en {{ ansible_host }}:{{ vpn_port }}/{{ vpn_proto }}"
+          - "Perfiles de cliente generados en ./clients/ (uno por dispositivo en vpn_clients)"

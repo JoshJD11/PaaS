@@ -1,5 +1,7 @@
+# WebServer, MySQL y Entidad certificadora (Con docker)
+
 chmod +x generate_certs.sh   # da permiso de ejecución al script
-./generate_certs.sh           # genera los 5 archivos de certificados
+./generate_certs_docker.sh           # genera los 5 archivos de certificados
 docker compose up -d          # levanta los 3 contenedores en background (-d = detached)
 docker compose ps             # muestra el estado de cada contenedor
 docker compose logs -f        # muestra los logs en tiempo real (útil para depurar)
@@ -14,4 +16,272 @@ Título del sitio: PaaS TEC (o el nombre del dominio si ya se tiene uno definido
 Nombre de usuario: admin (o algo fácil de recordar)
 Contraseña: Admin1234! (no es segura pero es para recordar fácilmente)
 Correo electrónico: admin@paas.tec.cr (En realidad puede ser cualquier correo, hasta uno inventado)
-En cuanto a visibilidad de motores de búsqueda, no importa para el proyecto por lo que se puede dejar como está. 
+En cuanto a visibilidad de motores de búsqueda, no importa para el proyecto por lo que se puede dejar como está.
+
+# ─────────────────────────────────────────
+# OwnCloud — Levantar y probar
+# ─────────────────────────────────────────
+docker compose up -d owncloud_db owncloud_redis owncloud
+
+docker compose logs -f owncloud
+# Esperar a ver algo como "Initializing finished" o que el contenedor
+# quede healthy (docker compose ps debe mostrar "healthy")
+
+http://localhost:8082   # Pantalla de login de OwnCloud
+Usuario: admin
+Contraseña: Admin1234!
+
+# Para comprobar que los archivos persisten en el volumen:
+docker compose exec owncloud ls -la /mnt/data/files/admin/files
+
+# Si necesitás reiniciar todo desde cero (borra archivos y BD de OwnCloud):
+docker compose down
+docker volume rm paas-ariana_owncloud_db_data paas-ariana_owncloud_redis_data paas-ariana_owncloud_files
+
+# ─────────────────────────────────────────
+# DHCP — Probar que el servidor reparte IPs
+# ─────────────────────────────────────────
+docker compose up -d dhcp dhcp_client_demo   # levanta solo el DHCP y un cliente de prueba
+
+docker compose logs -f dhcp_client_demo
+# Deberías ver algo así:
+#   --- IP asignada por Docker al iniciar ---     -> ej. 172.30.0.3 (la dio el IPAM de Docker)
+#   --- Solicitando IP real por DHCP ---           -> udhcpc manda DISCOVER/REQUEST
+#   --- IP obtenida del servidor DHCP ---          -> ej. 172.30.0.1xx (la dio dhcpd, NO Docker)
+
+docker compose logs dhcp
+# Acá se ven los DHCPDISCOVER / DHCPOFFER / DHCPREQUEST / DHCPACK que procesó el server
+
+# Para ver el handshake completo a nivel de paquetes (opcional, para la defensa):
+docker compose exec dhcp tcpdump -i eth0 -n port 67 or port 68
+
+# Para ver las concesiones (leases) otorgadas:
+docker compose exec dhcp cat /var/lib/dhcp/dhcpd.leases
+
+# ─────────────────────────────────────────
+# Thin Client Server (LTSP) — Levantar y probar
+# ─────────────────────────────────────────
+
+# Paso 0: Levantar los servicios necesarios
+docker compose up -d --build dhcp ltsp_server
+
+# 0.1: Ver los Logs (Si se necesita)
+docker compose logs -f ltsp_server
+
+# Paso 1: smoke test (NO hace PXE real, solo valida que el server responde)
+docker compose --profile test up ltsp_smoke_test
+# Si todo sale bien verás el contenido del rootfs (busybox, init, etc.)
+# montado por NFS, y la descarga exitosa de pxelinux.0 por TFTP.
+
+# Paso 2: prueba real de arranque PXE con una VM (QEMU), por fuera
+# del docker-compose (Docker no puede emular firmware/BIOS PXE).
+# Necesitas la VM/host donde corre Docker con acceso a "ip" y "qemu-system-x86_64".`
+
+# 2.1 Instalar QEMU en tu VM (si no lo tienes):
+sudo apt-get update && sudo apt-get install -y qemu-system-x86 bridge-utils
+
+# 2.2 Encontrar el bridge de Linux que Docker creó para la red wan:
+docker network inspect paas_wan -f '{{.Id}}'
+# Si ese nombre no existe, lista las redes para ver el nombre real del proyecto:
+docker network ls | grep wan
+# Toma los primeros 12 caracteres del Id, el bridge se llama "br-<esos 12 caracteres>":
+ip link show | grep br-
+
+# 2.3 Crear una interfaz tap y conectarla a ese bridge:
+sudo ip tuntap add dev tap0 mode tap
+sudo ip link set tap0 master br-XXXXXXXXXXXX   # sustituír por el bridge real
+sudo ip link set tap0 up
+
+# 2.4 Levantar la VM en modo "network boot" (-boot n):
+sudo qemu-system-x86_64 \
+  -m 512 \
+  -boot n \
+  -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
+  -device e1000,netdev=net0 \
+  -nographic
+
+# Deberías ver en la consola de QEMU: el menú PXELINUX, luego el kernel
+# cargando, "PaaS.net Thin Client: solicitando IP por DHCP...", y al final
+# el banner del rootfs montado por NFS con una shell de BusyBox.
+
+# Para matar el QEMU:
+sudo pkill qemu
+
+# Para limpiar la interfaz tap luego de la prueba:
+sudo ip link delete tap0
+
+# Limpiar todo
+docker compose down -v
+docker network prune -f
+docker container prune -f
+ 
+# ─────────────────────────────────────────
+# WebServer, MySQL y Entidad certificadora (Sin Docker)
+# ─────────────────────────────────────────
+
+# 1. Instalar lo necesario
+sudo apt update
+sudo apt install -y mysql-server nginx php-fpm php-mysql \
+    php-curl php-gd php-mbstring php-xml php-zip php-intl unzip wget
+
+# 2. Configurar la base de datos
+sudo mysql -u root
+CREATE DATABASE wordpress_db;
+CREATE USER 'wp_user'@'localhost' IDENTIFIED BY 'wp_password';
+GRANT ALL PRIVILEGES ON wordpress_db.* TO 'wp_user'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
+
+# 3. Instalar WordPress
+sudo mkdir -p /var/www/wordpress
+cd /tmp
+wget https://wordpress.org/latest.tar.gz
+tar -xzf latest.tar.gz
+sudo cp -r wordpress/* /var/www/wordpress/
+sudo chown -R www-data:www-data /var/www/wordpress
+sudo find /var/www/wordpress -type d -exec chmod 755 {} \;
+sudo find /var/www/wordpress -type f -exec chmod 644 {} \;
+
+# 4. Configurar wp-config.php
+cd /var/www/wordpress
+sudo cp wp-config-sample.php wp-config.php
+sudo nano wp-config.php
+
+# Ajustar estas líneas:
+define( 'DB_NAME', 'wordpress_db' );
+define( 'DB_USER', 'wp_user' );
+define( 'DB_PASSWORD', 'wp_password' );
+define( 'DB_HOST', 'localhost' );
+
+# (Opcional) Si se quiere forzar detección de HTTPS para evitar mixed content,
+# agregar esto antes de la línea "That's all, stop editing!":
+if ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '' === 'https' || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')) {
+    $_SERVER['HTTPS'] = 'on';
+}
+
+# 5. Generar los certificados autofirmados (dentro de la raíz del proyecto)
+# Dentro del script de OpenSSL, asegurarse de que la variable diga:
+CERTS_DIR="/etc/nginx/certs"
+
+# Ejecutar el script (con sudo, porque escribe en /etc/nginx/):
+sudo bash gen-certs.sh
+
+# Verificar que se generaron los archivos:
+ls -la /etc/nginx/certs/
+# Debe mostrar: ca.crt  ca.key  server.crt  server.csr  server.key
+
+# 6. Identificar la versión de PHP-FPM instalada
+ls /run/php/
+# Ejemplo: php8.4-fpm.sock -> la versión instalada es 8.4
+
+# 7. Crear /etc/nginx/sites-available/wordpress con el siguiente contenido,
+
+sudo touch /etc/nginx/sites-available/wordpress
+sudo nano /etc/nginx/sites-available/wordpress
+
+#    usando la versión detectada en el paso anterior en "fastcgi_pass":
+
+server {
+    listen 80;
+    server_name localhost;
+
+    root /var/www/wordpress;
+    index index.php index.html;
+
+    location / {
+        try_files $uri $uri/ /index.php?$args;
+    }
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php8.4-fpm.sock;
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name localhost;
+
+    ssl_certificate     /etc/nginx/certs/server.crt;
+    ssl_certificate_key /etc/nginx/certs/server.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+
+    root /var/www/wordpress;
+    index index.php index.html;
+
+    location / {
+        try_files $uri $uri/ /index.php?$args;
+    }
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php8.4-fpm.sock;
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+}
+
+# 8. Activar el sitio y desactivar el default
+sudo ln -s /etc/nginx/sites-available/wordpress /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t
+sudo systemctl restart nginx
+
+# 9. Habilitar servicios para que arranquen solos al encender la máquina
+#    (equivalente a "restart: always" en la versión con Docker)
+sudo systemctl enable --now mysql
+sudo systemctl enable --now php8.4-fpm   # usar la versión detectada en el paso 6
+sudo systemctl enable --now nginx
+
+# Si la versión de PHP-FPM resulta distinta a la usada en el paso 7,
+# corregir ambas líneas "fastcgi_pass" y recargar:
+sudo nano /etc/nginx/sites-available/wordpress
+sudo nginx -t
+sudo systemctl reload nginx
+
+# 10. Permitir los puertos 80 y 443 en el firewall (no se desactiva el firewall, solo se abren los puertos)
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+
+# 11. Completar la instalación inicial desde el navegador
+# Entrar a http://localhost y a https://localhost (cada uno por separado)
+# y llenar el formulario de instalación:
+#   Título del sitio: PaaS TEC
+#   Usuario:           admin
+#   Contraseña:        Admin1234!
+#   Correo:            admin@paas.tec.cr
+#   Visibilidad en buscadores: sin importancia para este proyecto
+
+# 12. Verificar que el sitio responde correctamente
+curl -I http://localhost
+curl -k -I https://localhost
+
+# Verificar también el panel de administración:
+# http://localhost/wp-admin
+# https://localhost/wp-admin
+
+# 13. Detener los servicios nativos para probar la versión con contenedores Docker
+sudo systemctl stop nginx
+sudo systemctl stop php8.4-fpm
+sudo systemctl stop mysql
+
+# 14. Volver a la versión nativa después de probar Docker
+sudo systemctl start mysql
+sudo systemctl start php8.4-fpm
+sudo systemctl start nginx
+
+
+# BigBlueButton
+
+Importar archivos del repo: git clone --recurse-submodules https://github.com/Sebco27/bbb-docker.git bbb-docker
+
+Ejecutar bbb.sh --build
+
+* Si faltan los submodulos usar: git submodule update --init

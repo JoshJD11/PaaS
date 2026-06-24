@@ -1,0 +1,53 @@
+---
+# Genera certificado + perfil .ovpn para UN cliente (client_name).
+# Se incluye en loop desde playbook.yml, una vez por cada
+# dispositivo definido en la variable vpn_clients.
+
+- name: "[{{ client_name }}] Generar solicitud de certificado"
+  command: "./easyrsa gen-req {{ client_name }} nopass"
+  args:
+    chdir: "{{ easyrsa_dir }}"
+    creates: "{{ easyrsa_dir }}/pki/private/{{ client_name }}.key"
+  environment:
+    EASYRSA_BATCH: "1"
+
+- name: "[{{ client_name }}] Firmar el certificado con la CA"
+  command: "./easyrsa sign-req client {{ client_name }}"
+  args:
+    chdir: "{{ easyrsa_dir }}"
+    creates: "{{ easyrsa_dir }}/pki/issued/{{ client_name }}.crt"
+  environment:
+    EASYRSA_BATCH: "1"
+
+- name: "[{{ client_name }}] Leer certificado firmado"
+  slurp:
+    src: "{{ easyrsa_dir }}/pki/issued/{{ client_name }}.crt"
+  register: _client_cert
+
+- name: "[{{ client_name }}] Leer llave privada"
+  slurp:
+    src: "{{ easyrsa_dir }}/pki/private/{{ client_name }}.key"
+  register: _client_key
+
+- name: "[{{ client_name }}] Generar perfil .ovpn con certificados embebidos"
+  template:
+    src: client.ovpn.j2
+    dest: "/tmp/{{ client_name }}.ovpn"
+    mode: '0600'
+  vars:
+    client_cert_content: "{{ _client_cert.content | b64decode }}"
+    client_key_content: "{{ _client_key.content | b64decode }}"
+    ca_cert_content: "{{ ca_cert_b64.content | b64decode }}"
+    ta_key_content: "{{ ta_key_b64.content | b64decode }}"
+    server_public_ip: "{{ ansible_host }}"
+
+- name: "[{{ client_name }}] Descargar el perfil .ovpn al equipo de control"
+  fetch:
+    src: "/tmp/{{ client_name }}.ovpn"
+    dest: "clients/{{ client_name }}.ovpn"
+    flat: yes
+
+- name: "[{{ client_name }}] Borrar copia temporal en el servidor"
+  file:
+    path: "/tmp/{{ client_name }}.ovpn"
+    state: absent
