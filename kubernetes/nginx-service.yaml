@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    kompose.cmd: kompose convert -f wordpress-kubernetes.yml --out ./kubernetes/
+    kompose.version: 1.38.0 (a8f5d1cbd)
+  labels:
+    io.kompose.service: nginx
+  name: nginx
+spec:
+  ports:
+    - name: "8081"
+      port: 8081
+      targetPort: 80
+    - name: "4443"
+      port: 4443
+      targetPort: 443
+  selector:
+    io.kompose.service: nginx

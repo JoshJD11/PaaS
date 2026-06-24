@@ -1,0 +1,19 @@
+apiVersion: v1
+data:
+  named.conf.local: |-
+    zone "paas.tec.cr" {
+        type master;
+        file "/etc/bind/zones/db.paas.tec.cr";
+    };
+
+    zone "172.20.0.in-addr.arpa" {
+        type master;
+        file "/etc/bind/zones/db.reverse";
+    };
+kind: ConfigMap
+metadata:
+  annotations:
+    use-subpath: "true"
+  labels:
+    io.kompose.service: dns
+  name: dns-cm2
