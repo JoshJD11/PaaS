@@ -88,6 +88,71 @@ services:
       - "8081:80"
       - "4443:443"
 
+  # Start_Klob
+  # --------------------------------------------------------------------
+  # dc1: representa "Active Directory". Aprovisiona un dominio AD nuevo
+  # (LAB.LOCAL) usando Samba. 
+  # --------------------------------------------------------------------
+  dc1:
+    build: ./ldap-dc/common
+    container_name: dc1
+    hostname: dc1
+    privileged: true          # Samba AD DC necesita varias capacidades del kernel
+    environment:
+      ROLE: primary
+      DOMAIN_REALM: LAB.LOCAL
+      DOMAIN_NETBIOS: LAB
+      ADMIN_PASSWORD: "Passw0rd123!"
+      MY_IP: 172.28.0.10
+      PRIMARY_DC_IP: 172.28.0.10
+    networks:
+      addomain_net:
+        ipv4_address: 172.28.0.10
+    extra_hosts:
+      - "dc1.lab.local:172.28.0.10"
+      - "dc2.lab.local:172.28.0.11"
+    volumes:
+      - dc1_samba:/var/lib/samba
+      - dc1_etc:/etc/samba
+    ports:
+      - "1389:389"     # LDAP   -> pruebas desde el host con ldapsearch / Apache Directory Studio
+      - "1636:636"     # LDAPS
+    restart: unless-stopped
+
+  # --------------------------------------------------------------------
+  # dc2:
+  # que se une como controlador de dominio adicional, replica vía el
+  # protocolo nativo de AD (DRS) y expone su propio LDAP (389/636)
+  # con los mismos datos del dominio, sincronizados con dc1.
+  # --------------------------------------------------------------------
+  dc2:
+    build: ./ldap-dc/common
+    container_name: dc2
+    hostname: dc2
+    privileged: true
+    depends_on:
+      - dc1
+    environment:
+      ROLE: secondary
+      DOMAIN_REALM: LAB.LOCAL
+      DOMAIN_NETBIOS: LAB
+      ADMIN_PASSWORD: "Passw0rd123!"
+      MY_IP: 172.28.0.11
+      PRIMARY_DC_IP: 172.28.0.10
+    networks:
+      addomain_net:
+        ipv4_address: 172.28.0.11
+    extra_hosts:
+      - "dc1.lab.local:172.28.0.10"
+      - "dc2.lab.local:172.28.0.11"
+    volumes:
+      - dc2_samba:/var/lib/samba
+      - dc2_etc:/etc/samba
+    ports:
+      - "2389:389"     # LDAP   -> este es el LDAP del "Linux Domain Controller"
+      - "2636:636"     # LDAPS
+    restart: unless-stopped
+  # End_Klob
   # ─────────────────────────────────────────
   # OwnCloud — base de datos propia (MariaDB)
   # Separada de la BD de WordPress, igual que el enunciado
@@ -343,6 +408,13 @@ volumes:
   nfs_data:
   smb_data:
 
+  # Start_Klob
+  dc1_samba:
+  dc1_etc:
+  dc2_samba:
+  dc2_etc:
+  # End_Klob
+
 # ─────────────────────────────────────────
 # Redes
 # ─────────────────────────────────────────
@@ -353,6 +425,14 @@ networks:
     ipam:
       config:
         - subnet: 172.20.0.0/24
+
+  # Start_Klob
+  addomain_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+  # End_Klob
 
   # Red "WAN" donde vive el servidor DHCP, separada de la LAN
   wan:
