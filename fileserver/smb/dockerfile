@@ -1,0 +1,17 @@
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y \
+    samba \
+    && rm -rf /var/lib/apt/lists/*
+
+# Directorio del SMB jail
+RUN mkdir -p /srv/smb/shared && chmod 777 /srv/smb/shared
+
+COPY smb.conf      /etc/samba/smb.conf
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# SMB/CIFS (TCP)
+EXPOSE 445 139
+
+CMD ["/entrypoint.sh"]

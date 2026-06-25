@@ -1,0 +1,5 @@
+# /etc/exports — NFS Jail
+# Exporta el directorio a cualquier cliente en la red Docker LAN
+# no_root_squash : el root del cliente mapea a root aquí (demo)
+# insecure       : permite puertos origen > 1024 (necesario en Docker)
+/srv/nfs/shared *(rw,sync,no_subtree_check,no_root_squash,insecure,fsid=0)

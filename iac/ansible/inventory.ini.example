@@ -1,0 +1,5 @@
+# Copiar este archivo a inventory.ini y reemplazar con la IP pública
+# que imprime "terraform output openvpn_public_ip"
+
+[openvpn_server]
+203.0.113.10 ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/mi-llave-aws.pem ansible_ssh_common_args='-o StrictHostKeyChecking=no'

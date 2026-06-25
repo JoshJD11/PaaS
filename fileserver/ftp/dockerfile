@@ -1,0 +1,22 @@
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y \
+    vsftpd \
+    && rm -rf /var/lib/apt/lists/*
+
+# Directorio del FTP jail
+RUN mkdir -p /srv/ftp/shared /var/run/vsftpd/empty
+
+# Usuario FTP — su home ES el jail
+RUN useradd -d /srv/ftp/shared -s /bin/bash ftpuser \
+    && echo "ftpuser:ftppassword" | chpasswd \
+    && chown ftpuser:ftpuser /srv/ftp/shared
+
+COPY vsftpd.conf  /etc/vsftpd.conf
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Puerto de control + rango pasivo
+EXPOSE 21 21100-21110
+
+CMD ["/entrypoint.sh"]

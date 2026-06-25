@@ -1,0 +1,7 @@
+#!/bin/bash
+set -e
+
+ip link set br0 down || true
+ip link set tap0 down || true
+ip link delete tap0 || true
+ip link delete br0 || true
